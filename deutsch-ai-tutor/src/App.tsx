@@ -1,0 +1,325 @@
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import Mascot from "./components/Mascot";
+import { MicButton, ProgressBar, StatusPill } from "./components/Controls";
+import { ApiError, fetchStatus, sendChat } from "./lib/api";
+import {
+  cancelSpeech,
+  canListen,
+  canSpeak,
+  micErrorMessage,
+  speak,
+  startListening,
+  unlockSpeech,
+  type Listener,
+} from "./lib/speech";
+import type { LessonInfo, Mood, Session, Status, Tutor } from "./types";
+
+const STORAGE_KEY = "deutsch-ai-tutor.v1";
+const EMPTY: Session = { history: [], step: 0, inLesson: 0, last: null, done: false };
+const FALLBACK_LESSONS: LessonInfo[] = [{ title: "التحية والوداع", level: "A1" }];
+
+function loadSession(): Session {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return { ...EMPTY, ...(JSON.parse(raw) as Partial<Session>) };
+  } catch {
+    /* private mode or corrupt data: start fresh */
+  }
+  return EMPTY;
+}
+
+function saveSession(s: Session) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+export default function App() {
+  const [session, setSession] = useState<Session>(loadSession);
+  const sessionRef = useRef(session);
+  const [mood, setMood] = useState<Mood>("ready");
+  const [tutor, setTutor] = useState<Tutor | null>(session.last);
+  const [heard, setHeard] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<Status | null>(null);
+  const [demo, setDemo] = useState(false);
+  const [typeMode, setTypeMode] = useState(!canListen);
+  const [draft, setDraft] = useState("");
+  const [slow, setSlow] = useState(true);
+  const [resetArmed, setResetArmed] = useState(false);
+
+  const runRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
+  const listenerRef = useRef<Listener | null>(null);
+
+  const commit = useCallback((next: Session) => {
+    sessionRef.current = next;
+    setSession(next);
+    saveSession(next);
+  }, []);
+
+  useEffect(() => {
+    fetchStatus()
+      .then((s) => {
+        setStatus(s);
+        setDemo(!s.live);
+      })
+      .catch((e: unknown) => setError(e instanceof ApiError ? e.message : "تعذر الاتصال بالخادم."));
+  }, []);
+
+  const lessons = status?.lessons ?? FALLBACK_LESSONS;
+  const total = Math.max(lessons.length, 1);
+  const stepIdx = Math.min(session.step, total - 1);
+  const current = lessons[stepIdx] ?? lessons[0];
+  // The bar shows progress inside the current level (A1 or A2), not the whole course.
+  const levelIdx = lessons.map((l, i) => (l.level === current.level ? i : -1)).filter((i) => i >= 0);
+  const levelStart = levelIdx[0] ?? 0;
+  const levelCount = Math.max(levelIdx.length, 1);
+  const finished = session.done && session.step >= total - 1;
+  const pct = finished
+    ? 100
+    : ((stepIdx - levelStart + Math.min(session.inLesson, 4) / 5) / levelCount) * 100;
+  const rate = slow ? 0.8 : 0.95;
+
+  const stopAll = useCallback(() => {
+    runRef.current++;
+    abortRef.current?.abort();
+    listenerRef.current?.abort();
+    cancelSpeech();
+    setHeard("");
+    setMood("ready");
+  }, []);
+
+  const sendTurn = useCallback(
+    async (text: string | null) => {
+      const runId = ++runRef.current;
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+      setError(null);
+      setMood("thinking");
+      if (text) setHeard(text);
+
+      const before = sessionRef.current;
+      try {
+        const reply = await sendChat(
+          { history: before.history.slice(-12), step: Math.min(before.step, total - 1), userText: text ?? "" },
+          ac.signal,
+        );
+        if (runRef.current !== runId) return;
+
+        const history = [
+          ...before.history,
+          ...(text ? [{ role: "user" as const, content: text }] : []),
+          { role: "assistant" as const, content: reply.german },
+        ].slice(-24);
+        const last: Tutor = {
+          german: reply.german,
+          arabic: reply.arabic,
+          correction: reply.correction,
+          pronunciationTip: reply.pronunciationTip,
+        };
+        const lastStep = reply.advance && before.step >= total - 1;
+        const step = reply.advance ? Math.min(before.step + 1, total - 1) : before.step;
+        commit({
+          history,
+          step,
+          inLesson: reply.advance ? 0 : before.inLesson + (text ? 1 : 0),
+          last,
+          done: lastStep || (before.done && before.step >= total - 1),
+        });
+        setDemo(reply.demo);
+        setTutor(last);
+        setMood("speaking");
+        await speak(reply.german, rate);
+        if (runRef.current === runId) setMood("ready");
+      } catch (e) {
+        if (runRef.current !== runId) return;
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        setError(e instanceof ApiError ? e.message : "حدث خطأ غير متوقع. حاول مرة أخرى.");
+        setMood("ready");
+      }
+    },
+    [commit, rate, total],
+  );
+
+  const startListen = useCallback(() => {
+    setError(null);
+    setHeard("");
+    setMood("listening");
+    listenerRef.current = startListening({
+      onInterim: setHeard,
+      onFinal: (t) => {
+        void sendTurn(t);
+      },
+      onError: (code) => {
+        setMood("ready");
+        setError(micErrorMessage(code));
+        if (code === "unsupported") setTypeMode(true);
+      },
+    });
+  }, [sendTurn]);
+
+  const onMic = () => {
+    if (mood === "listening") {
+      listenerRef.current?.stop();
+      return;
+    }
+    if (mood !== "ready") {
+      stopAll();
+      return;
+    }
+    unlockSpeech();
+    const s = sessionRef.current;
+    if (!s.last && s.history.length === 0) {
+      void sendTurn(null);
+      return;
+    }
+    if (!canListen) {
+      setTypeMode(true);
+      return;
+    }
+    startListen();
+  };
+
+  const onReplay = () => {
+    if (!tutor || mood !== "ready") return;
+    unlockSpeech();
+    const runId = ++runRef.current;
+    setMood("speaking");
+    void speak(tutor.german, rate).then(() => {
+      if (runRef.current === runId) setMood("ready");
+    });
+  };
+
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    const t = draft.trim();
+    if (!t || mood !== "ready") return;
+    unlockSpeech();
+    setDraft("");
+    void sendTurn(t);
+  };
+
+  const onReset = () => {
+    if (!resetArmed) {
+      setResetArmed(true);
+      window.setTimeout(() => setResetArmed(false), 3500);
+      return;
+    }
+    stopAll();
+    commit(EMPTY);
+    setTutor(null);
+    setError(null);
+    setResetArmed(false);
+  };
+
+  const started = session.history.length > 0 || session.last !== null;
+  const micLabel =
+    mood === "listening"
+      ? "أستمع إليك… اضغط عند الانتهاء"
+      : mood === "thinking" || mood === "speaking"
+        ? "اضغط للإيقاف"
+        : started
+          ? "اضغط وتحدث بالألمانية"
+          : "اضغط لبدء الدرس";
+
+  return (
+    <div className="app">
+      <header className="top">
+        <div className="titlerow">
+          <h1 className="title" dir="ltr">Deutsch AI Tutor</h1>
+          <span className="badge" dir="ltr">{current.level}</span>
+        </div>
+        <ProgressBar
+          pct={pct}
+          level={current.level}
+          title={current.title}
+          lesson={Math.min(stepIdx - levelStart + 1, levelCount)}
+          total={levelCount}
+        />
+      </header>
+
+      {demo && (
+        <p className="banner">
+          وضع تجريبي: ردود مكتوبة مسبقًا بلا تقييم لإجابتك. أضف ANTHROPIC_API_KEY لتفعيل المعلمة.
+        </p>
+      )}
+
+      <main className="stage">
+        <Mascot mood={mood} />
+        <StatusPill mood={mood} />
+      </main>
+
+      <section className="captions" aria-live="polite">
+        {heard && (
+          <p className="you" dir="auto">
+            <span className="tag">أنت</span> {heard}
+          </p>
+        )}
+        {tutor ? (
+          <>
+            <p className="de" dir="ltr" lang="de">{tutor.german}</p>
+            {tutor.arabic && <p className="ar">{tutor.arabic}</p>}
+            {tutor.correction && (
+              <p className="note fix" dir="auto">
+                <strong>تصحيح:</strong> {tutor.correction}
+              </p>
+            )}
+            {tutor.pronunciationTip && (
+              <p className="note tip">
+                <strong>نطق:</strong> {tutor.pronunciationTip}
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="intro">
+            ستتحدث معك كلارا بالألمانية من الصفر. اضغط على الميكروفون لتبدأ، ثم أجب بصوتك. ستظهر الجملة وترجمتها هنا.
+          </p>
+        )}
+        {error && <p className="note err" role="alert">{error}</p>}
+      </section>
+
+      <footer className="dock">
+        {typeMode && (
+          <form className="typebar" onSubmit={onSubmit}>
+            <input
+              id="draft"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="اكتب جوابك بالألمانية"
+              dir="auto"
+              lang="de"
+              autoComplete="off"
+              autoCapitalize="sentences"
+              enterKeyHint="send"
+              aria-label="جوابك"
+            />
+            <button type="submit" className="send" disabled={mood !== "ready" || !draft.trim() || !started}>
+              إرسال
+            </button>
+          </form>
+        )}
+        <div className="row">
+          <button type="button" className="side" onClick={onReplay} disabled={!tutor || mood !== "ready" || !canSpeak}>
+            أعد الجملة
+          </button>
+          <MicButton mood={mood} label={micLabel} onClick={onMic} />
+          <button type="button" className="side" onClick={() => setTypeMode((v) => !v)} aria-pressed={typeMode}>
+            {typeMode ? "إخفاء الكتابة" : "اكتب بدل الكلام"}
+          </button>
+        </div>
+        <div className="minor">
+          <button type="button" className="link" onClick={() => setSlow((v) => !v)} aria-pressed={slow}>
+            نطق {slow ? "بطيء" : "عادي"}
+          </button>
+          <button type="button" className="link" onClick={onReset}>
+            {resetArmed ? "اضغط مرة أخرى للتأكيد" : "ابدأ من جديد"}
+          </button>
+        </div>
+      </footer>
+    </div>
+  );
+}
