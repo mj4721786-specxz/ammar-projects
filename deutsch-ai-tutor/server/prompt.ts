@@ -1,4 +1,4 @@
-import { LESSONS } from "./curriculum";
+import { LESSONS } from "./curriculum.js";
 
 export function buildSystemPrompt(step: number): string {
   const total = LESSONS.length;

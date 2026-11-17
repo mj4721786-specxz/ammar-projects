@@ -1,9 +1,9 @@
 // Framework-independent tutor logic, shared by the Express server (Replit / local)
 // and the Vercel serverless functions in /api.
 import Anthropic from "@anthropic-ai/sdk";
-import { LESSONS } from "./curriculum";
-import { buildSystemPrompt } from "./prompt";
-import { demoReply, type TutorReply } from "./demo";
+import { LESSONS } from "./curriculum.js";
+import { buildSystemPrompt } from "./prompt.js";
+import { demoReply, type TutorReply } from "./demo.js";
 
 type Role = "user" | "assistant";
 interface Turn { role: Role; content: string }

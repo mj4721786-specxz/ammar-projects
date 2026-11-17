@@ -1,4 +1,4 @@
-import { chat } from "../server/core";
+import { chat } from "../server/core.js";
 
 export async function POST(request: Request) {
   const ip = (request.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();

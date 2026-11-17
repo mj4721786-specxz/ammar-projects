@@ -3,7 +3,7 @@ import express, { type Request, type Response } from "express";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { chat, statusBody, LIVE, MODEL_NAME } from "./core";
+import { chat, statusBody, LIVE, MODEL_NAME } from "./core.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 
