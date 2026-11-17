@@ -135,3 +135,11 @@ button { cursor: pointer; }
   .mascot *, .pill-dot, .mic::after { animation: none !important; }
   .progress-fill { transition: none; }
 }
+
+/* account */
+.account { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; font-size: 13px; color: var(--muted); }
+.account-mail { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-sync[data-state="error"] { color: #c0392b; }
+.authform { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.authform input { font: inherit; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line, #cfd6f5); background: var(--card, #fff); color: inherit; min-height: 44px; }
+.authrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

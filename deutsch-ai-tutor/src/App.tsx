@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Mascot from "./components/Mascot";
 import { MicButton, ProgressBar, StatusPill } from "./components/Controls";
+import Account from "./components/Account";
+import type { User } from "@supabase/supabase-js";
+import { supabase } from "./lib/supabase";
+import { loadCloudProgress, saveCloudProgress } from "./lib/cloud";
 import { ApiError, fetchStatus, sendChat } from "./lib/api";
 import {
   cancelSpeech,
@@ -54,11 +58,59 @@ export default function App() {
   const abortRef = useRef<AbortController | null>(null);
   const listenerRef = useRef<Listener | null>(null);
 
-  const commit = useCallback((next: Session) => {
-    sessionRef.current = next;
-    setSession(next);
-    saveSession(next);
+  const [user, setUser] = useState<User | null>(null);
+  const [sync, setSync] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const userRef = useRef<User | null>(null);
+  const saveTimer = useRef(0);
+
+  const pushToCloud = useCallback((next: Session) => {
+    const u = userRef.current;
+    if (!u) return;
+    window.clearTimeout(saveTimer.current);
+    setSync("saving");
+    saveTimer.current = window.setTimeout(() => {
+      void saveCloudProgress(u.id, next).then((ok) => setSync(ok ? "saved" : "error"));
+    }, 600);
   }, []);
+
+  const commit = useCallback(
+    (next: Session) => {
+      sessionRef.current = next;
+      setSession(next);
+      saveSession(next);
+      pushToCloud(next);
+    },
+    [pushToCloud],
+  );
+
+  /* Account: when someone signs in, keep whichever progress is further along. */
+  useEffect(() => {
+    if (!supabase) return;
+    const adopt = async (u: User | null) => {
+      userRef.current = u;
+      setUser(u);
+      if (!u) {
+        setSync("idle");
+        return;
+      }
+      const cloud = await loadCloudProgress(u.id);
+      const local = sessionRef.current;
+      const cloudScore = cloud ? cloud.step * 10 + cloud.inLesson : -1;
+      const localScore = local.step * 10 + local.inLesson;
+      if (cloud && cloudScore >= localScore) {
+        sessionRef.current = cloud;
+        setSession(cloud);
+        setTutor(cloud.last);
+        saveSession(cloud);
+        setSync("saved");
+      } else {
+        pushToCloud(local);
+      }
+    };
+    void supabase.auth.getSession().then(({ data }) => void adopt(data.session?.user ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, sessionNow) => void adopt(sessionNow?.user ?? null));
+    return () => sub.subscription.unsubscribe();
+  }, [pushToCloud]);
 
   useEffect(() => {
     fetchStatus()
@@ -311,6 +363,7 @@ export default function App() {
             {typeMode ? "إخفاء الكتابة" : "اكتب بدل الكلام"}
           </button>
         </div>
+        <Account user={user} sync={sync} />
         <div className="minor">
           <button type="button" className="link" onClick={() => setSlow((v) => !v)} aria-pressed={slow}>
             نطق {slow ? "بطيء" : "عادي"}

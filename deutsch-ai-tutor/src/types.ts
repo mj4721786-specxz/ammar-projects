@@ -17,7 +17,7 @@ export interface ChatReply extends Tutor {
   demo: boolean;
 }
 
-export type Level = "A1" | "A2";
+export type Level = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
 
 export interface LessonInfo {
   title: string;
