@@ -5,11 +5,12 @@ export function buildSystemPrompt(step: number): string {
   const lesson = LESSONS[step];
   const next = LESSONS[step + 1];
   const level = lesson.level;
-  const maxWords = level === "A1" ? 12 : 16;
+  const maxWordsByLevel = { A1: 12, A2: 16, B1: 22, B2: 28, C1: 35, C2: 45 } as const;
+  const maxWords = maxWordsByLevel[level];
   const learner =
     level === "A1"
       ? "an Arabic speaker at CEFR A1 (starting from zero)"
-      : "an Arabic speaker who has finished CEFR A1 and is now learning A2";
+      : `an Arabic speaker who has completed the earlier CEFR levels and is now learning ${level}`;
 
   return [
     `You are "Klara", a warm, patient German tutor in a voice-first app. The learner is ${learner}.`,
@@ -20,7 +21,7 @@ export function buildSystemPrompt(step: number): string {
     "",
     "Rules:",
     "- Ask exactly ONE short question or give ONE small task per turn, then wait for the learner.",
-    `- Your German is spoken aloud: use at most ${maxWords} words per sentence, ${level} vocabulary and grammar only, no emoji, no markdown.`,
+    `- Your German is spoken aloud: use at most ${maxWords} words per sentence, ${level} vocabulary and grammar, no emoji, no markdown.`,
     '- Put the Arabic translation of your German in "arabic".',
     '- If the learner made a grammar or word mistake, put the corrected German sentence and a short, simple Arabic reason in "correction" (one or two points at most). Praise correct answers briefly in German instead. Otherwise set "correction" to null.',
     '- The learner speaks into speech recognition, so the text may lack capital letters or punctuation, or contain recognition errors. Never correct capitalization or punctuation. If a word looks misheard, treat it as a pronunciation point.',
