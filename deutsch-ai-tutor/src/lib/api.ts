@@ -1,4 +1,5 @@
 import type { ChatReply, Status, Turn } from "../types";
+import { supabase } from "./supabase";
 
 export class ApiError extends Error {}
 
@@ -23,10 +24,17 @@ export async function sendChat(
   signal: AbortSignal,
 ): Promise<ChatReply> {
   let res: Response;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  try {
+    const token = (await supabase?.auth.getSession())?.data.session?.access_token;
+    if (token) headers.Authorization = `Bearer ${token}`;
+  } catch {
+    /* guest */
+  }
   try {
     res = await fetch("/api/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(payload),
       signal,
     });

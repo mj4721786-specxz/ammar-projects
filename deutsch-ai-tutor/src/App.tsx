@@ -4,7 +4,8 @@ import { MicButton, ProgressBar, StatusPill } from "./components/Controls";
 import Account from "./components/Account";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
-import { loadCloudProgress, saveCloudProgress } from "./lib/cloud";
+import { addCloudWord, deleteCloudWord, loadCloudProgress, loadCloudWords, loadStreak, saveCloudProgress, type Word } from "./lib/cloud";
+import Panel from "./components/Panel";
 import { ApiError, fetchStatus, sendChat } from "./lib/api";
 import {
   cancelSpeech,
@@ -32,6 +33,23 @@ function loadSession(): Session {
   return EMPTY;
 }
 
+const WORDS_KEY = "deutsch-ai-tutor.words.v1";
+function loadWords(): Word[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(WORDS_KEY) || "[]");
+    return Array.isArray(raw) ? raw.filter((w) => w && typeof w.german === "string") : [];
+  } catch {
+    return [];
+  }
+}
+function storeWords(w: Word[]) {
+  try {
+    localStorage.setItem(WORDS_KEY, JSON.stringify(w));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 function saveSession(s: Session) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
@@ -53,6 +71,10 @@ export default function App() {
   const [draft, setDraft] = useState("");
   const [slow, setSlow] = useState(true);
   const [resetArmed, setResetArmed] = useState(false);
+  const [words, setWords] = useState<Word[]>(loadWords);
+  const wordsRef = useRef(words);
+  const [streak, setStreak] = useState<number | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [reaction, setReaction] = useState<MascotReaction>(null);
   const [bubble, setBubble] = useState<MascotBubble | null>(null);
   const streakRef = useRef(0);
@@ -95,6 +117,7 @@ export default function App() {
       setUser(u);
       if (!u) {
         setSync("idle");
+        setStreak(null);
         return;
       }
       const cloud = await loadCloudProgress(u.id);
@@ -110,6 +133,16 @@ export default function App() {
       } else {
         pushToCloud(local);
       }
+      // saved words: merge this device's words into the account, then show the union
+      const cloudWords = await loadCloudWords(u.id);
+      const known = new Set(cloudWords.map((w) => w.german));
+      const extra = wordsRef.current.filter((w) => !known.has(w.german));
+      await Promise.all(extra.map((w) => addCloudWord(u.id, w)));
+      const merged = [...extra, ...cloudWords];
+      wordsRef.current = merged;
+      setWords(merged);
+      storeWords(merged);
+      setStreak(await loadStreak(u.id));
     };
     void supabase.auth.getSession().then(({ data }) => void adopt(data.session?.user ?? null));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, sessionNow) => void adopt(sessionNow?.user ?? null));
@@ -283,6 +316,24 @@ export default function App() {
     void sendTurn(t);
   };
 
+  const saveWord = () => {
+    if (!tutor || wordsRef.current.some((w) => w.german === tutor.german)) return;
+    const w: Word = { german: tutor.german, arabic: tutor.arabic };
+    const next = [w, ...wordsRef.current];
+    wordsRef.current = next;
+    setWords(next);
+    storeWords(next);
+    if (userRef.current) void addCloudWord(userRef.current.id, w);
+  };
+
+  const deleteWord = (german: string) => {
+    const next = wordsRef.current.filter((w) => w.german !== german);
+    wordsRef.current = next;
+    setWords(next);
+    storeWords(next);
+    if (userRef.current) void deleteCloudWord(userRef.current.id, german);
+  };
+
   const onReset = () => {
     if (!resetArmed) {
       setResetArmed(true);
@@ -343,6 +394,9 @@ export default function App() {
           <>
             <p className="de" dir="ltr" lang="de">{tutor.german}</p>
             {tutor.arabic && <p className="ar">{tutor.arabic}</p>}
+            <button type="button" className="link savebtn" onClick={saveWord} disabled={words.some((w) => w.german === tutor.german)}>
+              {words.some((w) => w.german === tutor.german) ? "محفوظة ✓" : "احفظ الجملة"}
+            </button>
             {tutor.correction && (
               <p className="note fix" dir="auto">
                 <strong>تصحيح:</strong> {tutor.correction}
@@ -361,6 +415,20 @@ export default function App() {
         )}
         {error && <p className="note err" role="alert">{error}</p>}
       </section>
+
+      {panelOpen && (
+        <Panel
+          level={current.level}
+          lesson={stepIdx + 1}
+          total={total}
+          words={words}
+          streak={streak}
+          signedIn={Boolean(user)}
+          onListen={unlockSpeech}
+          onDelete={deleteWord}
+          onClose={() => setPanelOpen(false)}
+        />
+      )}
 
       <footer className="dock">
         {typeMode && (
@@ -395,6 +463,9 @@ export default function App() {
         <div className="minor">
           <button type="button" className="link" onClick={() => setSlow((v) => !v)} aria-pressed={slow}>
             نطق {slow ? "بطيء" : "عادي"}
+          </button>
+          <button type="button" className="link" onClick={() => setPanelOpen((v) => !v)} aria-pressed={panelOpen}>
+            إحصائياتي وكلماتي
           </button>
           <button type="button" className="link" onClick={onReset}>
             {resetArmed ? "اضغط مرة أخرى للتأكيد" : "ابدأ من جديد"}

@@ -20,7 +20,8 @@ app.get("/api/status", (_req, res) => {
 });
 
 app.post("/api/chat", async (req: Request, res: Response) => {
-  const r = await chat(req.body, req.ip ?? "unknown");
+  const token = (req.get("authorization") ?? "").replace(/^Bearer\s+/i, "") || null;
+  const r = await chat(req.body, req.ip ?? "unknown", token);
   res.status(r.status).json(r.body);
 });
 

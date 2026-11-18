@@ -8,6 +8,7 @@ export async function POST(request: Request) {
   } catch {
     body = null;
   }
-  const r = await chat(body, ip);
+  const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "") || null;
+  const r = await chat(body, ip, token);
   return Response.json(r.body, { status: r.status });
 }

@@ -79,7 +79,31 @@ export function statusBody() {
   return { live: Boolean(client), lessons: LESSONS.map((l) => ({ title: l.titleAr, level: l.level })) };
 }
 
-export async function chat(rawBody: unknown, ip: string): Promise<CoreResult> {
+const SB_URL = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
+const SB_KEY = (process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+const DAILY_LIMIT = Number(process.env.DAILY_LIMIT) || 30;
+
+/**
+ * Counts one AI message for a signed-in user, using the user's own token (no service key needed).
+ * Returns "blocked" when today's limit is reached, otherwise "ok" (also for guests / if the database is unreachable).
+ */
+async function checkDailyLimit(token: string | null): Promise<"ok" | "blocked"> {
+  if (!token || !SB_URL || !SB_KEY) return "ok";
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/rpc/bump_daily_usage`, {
+      method: "POST",
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ max_messages: DAILY_LIMIT }),
+    });
+    if (!r.ok) return "ok";
+    const rows = (await r.json()) as Array<{ allowed?: boolean }>;
+    return rows?.[0]?.allowed === false ? "blocked" : "ok";
+  } catch {
+    return "ok";
+  }
+}
+
+export async function chat(rawBody: unknown, ip: string, token: string | null = null): Promise<CoreResult> {
   if (limited(ip)) {
     return fail(429, "rate_limited", "وصلت إلى حد الطلبات مؤقتًا. انتظر بضع دقائق ثم تابع.");
   }
@@ -92,6 +116,10 @@ export async function chat(rawBody: unknown, ip: string): Promise<CoreResult> {
   if (!client) {
     const userTurns = history.filter((t) => t.role === "user").length + (userText ? 1 : 0);
     return { status: 200, body: { ...demoReply(userTurns), demo: true } };
+  }
+
+  if ((await checkDailyLimit(token)) === "blocked") {
+    return fail(429, "daily_limit", "وصلت إلى الحد اليومي من الرسائل. عد غدًا لتكمل الدرس، وتقدمك محفوظ.");
   }
 
   const messages: Turn[] = [...history];

@@ -172,3 +172,19 @@ button { cursor: pointer; }
 @keyframes jump { 0% { transform: translateY(0); } 40% { transform: translateY(-18px) scale(1.04); } 100% { transform: translateY(0); } }
 @keyframes twinkle { from { opacity: .3; transform: scale(.7); } to { opacity: 1; transform: scale(1.1); } }
 @keyframes pop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* stats + saved words */
+.panel { background: var(--card); border: 1.5px solid var(--line); border-radius: 18px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; max-height: 46dvh; overflow: auto; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; }
+.panel-sub { font-size: 14px; margin-top: 4px; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; }
+.stats div { display: flex; flex-direction: column; gap: 2px; background: #f3f6ff; border-radius: 12px; padding: 8px 2px; }
+.stats b { font-size: 17px; }
+.stats span { font-size: 11px; color: var(--muted); }
+.words { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.words li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; }
+.words li > div:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.w-de { font-weight: 600; overflow-wrap: anywhere; }
+.w-ar { font-size: 13px; color: var(--muted); }
+.w-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.savebtn { align-self: center; }
