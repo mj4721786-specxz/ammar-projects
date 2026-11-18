@@ -49,6 +49,14 @@ function sanitizeHistory(raw: unknown): Turn[] {
   return out;
 }
 
+function parseJoke(v: unknown): { german: string; arabic: string } | null {
+  if (!v || typeof v !== "object") return null;
+  const j = v as Record<string, unknown>;
+  const g = typeof j.german === "string" ? j.german.trim().slice(0, 160) : "";
+  const a = typeof j.arabic === "string" ? j.arabic.trim().slice(0, 160) : "";
+  return g && a ? { german: g, arabic: a } : null;
+}
+
 function parseReply(text: string): TutorReply {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
@@ -63,6 +71,7 @@ function parseReply(text: string): TutorReply {
     correction: str(o.correction),
     pronunciationTip: str(o.pronunciationTip),
     advance: o.advance === true,
+    joke: parseJoke(o.joke),
   };
 }
 

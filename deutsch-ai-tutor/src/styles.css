@@ -66,7 +66,8 @@ button { cursor: pointer; }
 /* mascot motion */
 .mascot * { transform-box: fill-box; transform-origin: center; }
 .mascot .bob { animation: bob 3.4s ease-in-out infinite; }
-.mascot .eye { animation: blink 4.8s infinite; }
+.mascot .eye { transition: transform .08s ease; }
+.mascot .eyes[data-blink="true"] .eye { transform: scaleY(.08); }
 .mascot .dot.a { animation: wiggle 3.4s ease-in-out infinite; }
 .mascot .dot.b { animation: wiggle 3.4s ease-in-out -1.2s infinite; }
 .mascot .m-talk, .mascot .m-o, .mascot .m-flat, .mascot .waves { display: none; }
@@ -132,7 +133,7 @@ button { cursor: pointer; }
 
 @media (max-height: 640px) { .mascot { width: min(44vw, 160px); } .captions { max-height: 30dvh; } }
 @media (prefers-reduced-motion: reduce) {
-  .mascot *, .pill-dot, .mic::after { animation: none !important; }
+  .mascot *, .mascot-bubble, .pill-dot, .mic::after { animation: none !important; }
   .progress-fill { transition: none; }
 }
 
@@ -143,3 +144,31 @@ button { cursor: pointer; }
 .authform { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .authform input { font: inherit; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line, #cfd6f5); background: var(--card, #fff); color: inherit; min-height: 44px; }
 .authrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* Klara: gaze, arms, reactions, bubbles */
+.mascot-stage { position: relative; display: flex; flex-direction: column; align-items: center; }
+.mascot .eyes[data-gaze="left"] { transform: translate(-6px, 0); }
+.mascot .eyes[data-gaze="right"] { transform: translate(6px, 0); }
+.mascot .eyes[data-gaze="up"] { transform: translate(0, -6px); }
+.mascot .m-encourage, .mascot .thinking-cue, .mascot .sparkles { display: none; }
+.mascot .arm { transform-origin: 50% 100%; }
+.mascot[data-mood="thinking"] .thinking-cue { display: block; animation: wiggle 1.4s ease-in-out infinite; }
+.mascot[data-mood="listening"] .torso { transform: rotate(-3deg); transition: transform .25s ease; }
+.mascot[data-mood="speaking"] .arm-left { animation: gesture .6s ease-in-out infinite alternate; }
+.mascot[data-mood="speaking"] .arm-right { animation: gesture .6s ease-in-out -.3s infinite alternate; }
+.mascot[data-reaction="happy"] .bob, .mascot[data-reaction="lesson"] .bob { animation: jump .7s ease-out 2; }
+.mascot[data-reaction="lesson"] .sparkles, .mascot[data-reaction="happy"] .sparkles { display: block; }
+.mascot .sparkle { fill: #FFC53D; animation: twinkle .7s ease-in-out infinite alternate; }
+.mascot .sparkle-b { animation-delay: -.25s; }
+.mascot .sparkle-c { animation-delay: -.5s; }
+.mascot[data-reaction="encouraging"] .m-smile { display: none; }
+.mascot[data-reaction="encouraging"] .m-encourage { display: block; }
+.mascot[data-reaction="encouraging"] .brow.l { transform: translateY(-3px) rotate(-6deg); }
+.mascot-bubble { max-width: min(86vw, 320px); margin-top: 4px; padding: 8px 14px; border-radius: 18px; background: var(--card); border: 1.5px solid var(--line); box-shadow: 0 6px 16px rgba(92,107,220,.15); display: flex; flex-direction: column; gap: 2px; text-align: center; animation: pop .35s ease-out; }
+.mascot-bubble-joke { border-color: #FFC53D; }
+.bubble-german { font-weight: 600; font-size: 15px; }
+.bubble-arabic { font-size: 14px; color: var(--muted); }
+@keyframes gesture { from { transform: rotate(-8deg); } to { transform: rotate(10deg); } }
+@keyframes jump { 0% { transform: translateY(0); } 40% { transform: translateY(-18px) scale(1.04); } 100% { transform: translateY(0); } }
+@keyframes twinkle { from { opacity: .3; transform: scale(.7); } to { opacity: 1; transform: scale(1.1); } }
+@keyframes pop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }

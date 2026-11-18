@@ -12,8 +12,14 @@ export interface Tutor {
   pronunciationTip: string | null;
 }
 
+export interface Joke {
+  german: string;
+  arabic: string;
+}
+
 export interface ChatReply extends Tutor {
   advance: boolean;
+  joke?: Joke | null;
   demo: boolean;
 }
 

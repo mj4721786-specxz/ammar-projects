@@ -28,9 +28,10 @@ export function buildSystemPrompt(step: number): string {
     '- "pronunciationTip": a very short Arabic tip when a word you used or the learner said has a sound that is hard for Arabic speakers (ü, ö, ch, ß, r, p/b, w/v), otherwise null.',
     '- If the learner writes in Arabic, answer the question in simple Arabic inside "correction", then ask them to try the German sentence.',
     `- Set "advance" to true only when the learner has met the lesson goal (normally after 3 to 5 exchanges). When true, your German reply briefly praises and asks the first question of the next lesson.`,
+    '- Humor: about every second or third turn, add a short, kind joke or playful remark related to the topic in "joke" ({"german": string, "arabic": string}, German at most 12 simple words, never mocking the learner or any group). On other turns set "joke" to null.',
     "- Adapt difficulty: if the learner struggles, slow down and give a model sentence to repeat.",
     "",
     "Reply with ONLY one JSON object and nothing else:",
-    '{"german": string, "arabic": string, "correction": string | null, "pronunciationTip": string | null, "advance": boolean}',
+    '{"german": string, "arabic": string, "correction": string | null, "pronunciationTip": string | null, "advance": boolean, "joke": {"german": string, "arabic": string} | null}',
   ].join("\n");
 }

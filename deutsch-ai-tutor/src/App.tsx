@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import Mascot from "./components/Mascot";
+import Mascot, { type MascotBubble, type MascotReaction } from "./components/Mascot";
 import { MicButton, ProgressBar, StatusPill } from "./components/Controls";
 import Account from "./components/Account";
 import type { User } from "@supabase/supabase-js";
@@ -53,6 +53,10 @@ export default function App() {
   const [draft, setDraft] = useState("");
   const [slow, setSlow] = useState(true);
   const [resetArmed, setResetArmed] = useState(false);
+  const [reaction, setReaction] = useState<MascotReaction>(null);
+  const [bubble, setBubble] = useState<MascotBubble | null>(null);
+  const streakRef = useRef(0);
+  const fxTimer = useRef(0);
 
   const runRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -184,6 +188,30 @@ export default function App() {
         });
         setDemo(reply.demo);
         setTutor(last);
+
+        // Klara reacts: cheer for a good answer, comfort for a mistake, and sometimes joke.
+        const cheers = ["أحسنت! استمر هكذا", "رائع! أنت تتقدم بسرعة", "ممتاز، إجابات متتالية صحيحة!"];
+        let fxReaction: MascotReaction = null;
+        let fxBubble: MascotBubble | null = null;
+        if (text) {
+          if (reply.correction) {
+            streakRef.current = 0;
+            fxReaction = "encouraging";
+          } else {
+            streakRef.current += 1;
+            fxReaction = "happy";
+          }
+        }
+        if (reply.advance) fxReaction = "lesson";
+        if (reply.joke) fxBubble = { kind: "joke", german: reply.joke.german, arabic: reply.joke.arabic };
+        else if (streakRef.current >= 3 && streakRef.current % 3 === 0) fxBubble = { kind: "cheer", arabic: cheers[(streakRef.current / 3 - 1) % cheers.length] };
+        window.clearTimeout(fxTimer.current);
+        setReaction(fxReaction);
+        setBubble(fxBubble);
+        fxTimer.current = window.setTimeout(() => {
+          setReaction(null);
+          setBubble(null);
+        }, 7000);
         setMood("speaking");
         await speak(reply.german, rate);
         if (runRef.current === runId) setMood("ready");
@@ -301,7 +329,7 @@ export default function App() {
       )}
 
       <main className="stage">
-        <Mascot mood={mood} />
+        <Mascot mood={mood} reaction={reaction} bubble={bubble} />
         <StatusPill mood={mood} />
       </main>
 
