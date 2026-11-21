@@ -188,3 +188,6 @@ button { cursor: pointer; }
 .w-ar { font-size: 13px; color: var(--muted); }
 .w-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .savebtn { align-self: center; }
+
+.google { background: #fff; color: #1b2340; border: 1.5px solid var(--line); }
+.or { font-size: 12px; color: var(--muted); text-align: center; }

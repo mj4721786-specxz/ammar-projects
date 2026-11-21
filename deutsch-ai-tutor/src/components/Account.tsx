@@ -33,6 +33,12 @@ export default function Account({ user, sync }: { user: User | null; sync: "idle
     );
   }
 
+  const google = async () => {
+    setMsg(null);
+    const { error } = await supabase!.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin } });
+    if (error) setMsg("تسجيل الدخول بحساب Google غير مفعّل بعد. استخدم البريد الآن.");
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (busy) return;
@@ -56,6 +62,10 @@ export default function Account({ user, sync }: { user: User | null; sync: "idle
         </button>
       ) : (
         <form className="authform" onSubmit={submit}>
+          <button type="button" className="send google" onClick={() => void google()}>
+            الدخول بحساب Google
+          </button>
+          <span className="or">أو بالبريد</span>
           <input type="email" dir="ltr" placeholder="البريد الإلكتروني" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required aria-label="البريد الإلكتروني" />
           <input type="password" dir="ltr" placeholder="كلمة السر" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === "in" ? "current-password" : "new-password"} minLength={6} required aria-label="كلمة السر" />
           <div className="authrow">
